@@ -1,15 +1,15 @@
 {
-  "name": "tetherflash-mailer",
+  "name": "tetherapp-backend",
   "version": "1.0.0",
-  "description": "TetherFlash Transaction Email Sender",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
+    "tronweb": "^5.2.0",
     "express": "^4.18.2",
-    "nodemailer": "^6.9.4",
     "body-parser": "^1.20.2",
-    "cors": "^2.8.5"
+    "nodemailer": "^6.9.13",
+    "dotenv": "^16.4.0"
   }
 }
