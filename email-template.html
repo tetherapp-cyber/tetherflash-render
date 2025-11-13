@@ -1,34 +1,39 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>TetherFlash Receipt</title>
+  <meta charset="UTF-8" />
+  <title>Transaction Successful</title>
   <style>
-    body { font-family: Arial, sans-serif; background:#f4f7fa; padding:20px;}
-    .card { background:#fff; border-radius:10px; padding:20px; max-width:600px; margin:auto; box-shadow:0 4px 12px rgba(0,0,0,0.08);}
-    h2 { color:#0ea5a2; text-align:center; }
-    .row { display:flex; justify-content:space-between; margin:8px 0; }
-    .label { color:#555; }
-    .value { font-weight:bold; }
-    .footer { text-align:center; margin-top:20px; font-size:12px; color:#999; }
-    a { color:#0ea5a2; text-decoration:none; }
+    body { font-family: Arial, sans-serif; background: #f6f9fc; padding: 20px; }
+    .container {
+      background: white; border-radius: 12px; padding: 30px;
+      max-width: 480px; margin: auto; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h2 { color: #00BFA5; }
+    p { font-size: 15px; color: #333; }
+    .footer { font-size: 13px; color: #777; margin-top: 20px; text-align: center; }
+    a.button {
+      display: inline-block; padding: 10px 20px;
+      background: #00BFA5; color: white; border-radius: 6px;
+      text-decoration: none; margin-top: 10px;
+    }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h2>TetherFlash Transaction Receipt</h2>
-    <p>Hello <strong>{{user_name}}</strong>,</p>
-    <p>Your recent transaction details are below:</p>
+  <div class="container">
+    <h2>Transaction Successful 🎉</h2>
+    <p>Dear User,</p>
+    <p>Your transaction has been successfully completed.</p>
 
-    <div class="row"><div class="label">Amount:</div><div class="value">{{amount}} USDT</div></div>
-    <div class="row"><div class="label">Recipient:</div><div class="value">{{address}}</div></div>
-    <div class="row"><div class="label">Status:</div><div class="value">{{status_text}}</div></div>
-    <div class="row"><div class="label">Date:</div><div class="value">{{date}}</div></div>
-    <div class="row"><div class="label">Tx Hash:</div><div class="value"><a href="{{tx_link}}">{{hash}}</a></div></div>
-    <div class="row"><div class="label">Balance After:</div><div class="value">{{balance_after}} USDT</div></div>
+    <p><b>Amount:</b> {{amount}} USDT</p>
+    <p><b>Recipient Address:</b> {{recipient}}</p>
 
-    <p style="margin-top:20px;">Thank you for using <strong>TetherFlash</strong>!</p>
-    <div class="footer">© 2025 TetherFlash</div>
+    <a class="button" href="{{txLink}}">View on Tronscan</a>
+
+    <div class="footer">
+      <p>Thank you for using <b>TetherApp</b>!</p>
+      <p>© 2025 TetherApp</p>
+    </div>
   </div>
 </body>
 </html>
