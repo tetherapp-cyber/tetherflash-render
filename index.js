@@ -1,64 +1,118 @@
-import express from "express";
-import nodemailer from "nodemailer";
-import bodyParser from "body-parser";
-import cors from "cors";
+const TronWeb = require('tronweb');
+const express = require('express');
+const bodyParser = require('body-parser');
+const nodemailer = require('nodemailer');
+require('dotenv').config();
 
 const app = express();
-app.use(cors());
 app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
-// ⚙️ Transporter config — use your own email + app password
+// TronWeb setup - PRIVATE_KEY must be set in environment variables on Render
+const tronWeb = new TronWeb({
+  fullHost: process.env.TRON_FULL_NODE || 'https://nile.trongrid.io',
+  privateKey: process.env.PRIVATE_KEY || ''
+});
+
+// Default USDT (TRC20) contract for Nile testnet (change via ENV if needed)
+const USDT_CONTRACT = process.env.USDT_CONTRACT || 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf';
+
+// Nodemailer transporter (EMAIL_USER and EMAIL_PASS required in environment)
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  service: 'gmail',
   auth: {
-    user: "yourgmail@gmail.com", // your Gmail
-    pass: "your_app_password"    // use Google App Password, not normal password
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
   }
 });
 
-app.post("/send-usdt", async (req, res) => {
+app.get('/', (req, res) => {
+  res.send('✅ TetherApp backend (Render) is running');
+});
+
+// Send USDT (TRC20) route
+app.post('/send-usdt', async (req, res) => {
   try {
-    const { email, amount, txid } = req.body;
+    const recipient = req.body.recipient || req.body.to || req.body.address;
+    const amountRaw = req.body.amount || req.body.value;
+    if (!recipient || !amountRaw) {
+      return res.status(400).json({ success:false, error: 'recipient and amount required' });
+    }
 
-    const htmlTemplate = `
-    <div style="font-family: Arial, sans-serif; background-color:#ffffff; padding:20px; border-radius:12px; border:1px solid #00C853; max-width:600px; margin:auto;">
-      <h2 style="color:#00C853; text-align:center;">TetherFlash Transaction Confirmation</h2>
-      <p style="font-size:16px; color:#333;">Dear user,</p>
-      <p style="font-size:16px; color:#333;">
-        Your recent <strong>USDT transaction</strong> was successful.
-      </p>
-      <div style="background:#f8f8f8; padding:15px; border-radius:8px; border-left:5px solid #00C853; margin:15px 0;">
-        <p><strong>Amount:</strong> ${amount} USDT</p>
-        <p><strong>Transaction ID:</strong> ${txid}</p>
-        <p><strong>Status:</strong> Successful ✅</p>
-      </div>
-      <p style="font-size:14px; color:#555;">
-        Thank you for using <strong style="color:#00C853;">TetherFlash</strong>.  
-        If you did not authorize this transaction, please contact support immediately.
-      </p>
-      <div style="text-align:center; margin-top:25px;">
-        <a href="https://tetherflash.app" style="background-color:#00C853; color:white; padding:10px 25px; text-decoration:none; border-radius:6px; font-weight:bold;">
-          Visit Dashboard
-        </a>
-      </div>
-      <p style="text-align:center; color:#999; font-size:12px; margin-top:25px;">
-        © 2025 TetherFlash. All rights reserved.
-      </p>
-    </div>
-    `;
+    // Convert decimal input (e.g., "1.5") into token units (6 decimals for USDT)
+    function toTokenUnits(amount) {
+      const parts = String(amount).split('.');
+      let whole = parts[0] || '0';
+      let frac = parts[1] || '';
+      while (frac.length < 6) frac += '0';
+      if (frac.length > 6) frac = frac.slice(0, 6);
+      const wholeBig = BigInt(whole) * BigInt(1000000);
+      const fracBig = BigInt(frac || '0');
+      return (wholeBig + fracBig).toString();
+    }
 
-    await transporter.sendMail({
-      from: '"TetherFlash" <yourgmail@gmail.com>',
-      to: email,
-      subject: "Your USDT Transaction Receipt",
-      html: htmlTemplate
-    });
+    const amount = toTokenUnits(amountRaw);
+    console.log(`Sending ${amountRaw} USDT -> ${recipient} (units: ${amount})`);
 
-    res.json({ success: true, message: "Email sent successfully!" });
+    const contract = await tronWeb.contract().at(USDT_CONTRACT);
+    // call TRC20 transfer method; set a safe feeLimit
+    const tx = await contract.methods.transfer(recipient, amount).send({ feeLimit: 1_000_000_000 });
+
+    console.log('Transaction result:', tx);
+
+    // Normalize hash
+    let txHash = null;
+    if (typeof tx === 'string') txHash = tx;
+    else if (tx && tx.transaction && tx.transaction.txID) txHash = tx.transaction.txID;
+    else if (tx && tx.txId) txHash = tx.txId;
+    else if (tx && tx.txID) txHash = tx.txID;
+    else if (tx && tx.result && tx.result.txID) txHash = tx.result.txID;
+    else txHash = JSON.stringify(tx);
+
+    return res.json({ success: true, txHash });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: "Failed to send email", error: err.message });
+    console.error('Send error', err && err.message ? err.message : err);
+    return res.status(500).json({ success: false, error: (err && err.message) || String(err) });
   }
 });
 
-app.listen(3000, () => console.log("✅ Server running on port 3000"));
+// Balance route - returns USDT balance for the server wallet (uses address from PRIVATE_KEY)
+app.get('/balance', async (req, res) => {
+  try {
+    const address = tronWeb.address.fromPrivateKey(process.env.PRIVATE_KEY);
+    const contract = await tronWeb.contract().at(USDT_CONTRACT);
+    const balance = await contract.methods.balanceOf(address).call();
+    const readable = Number(balance) / 1_000_000;
+    res.json({ success: true, balance: readable });
+  } catch (err) {
+    console.error('Balance error', err && err.message ? err.message : err);
+    res.status(500).json({ success: false, error: (err && err.message) || String(err) });
+  }
+});
+
+// Send simple email (useful for receipts if you want to call separately)
+app.post('/send-email', async (req, res) => {
+  try {
+    const { to, subject, message } = req.body;
+    if (!to || !subject || !message) {
+      return res.status(400).json({ success:false, error:'to, subject, message required' });
+    }
+
+    const mailOptions = {
+      from: `"TetherApp" <${process.env.EMAIL_USER}>`,
+      to,
+      subject,
+      html: message
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log('Email sent to', to);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Email error', err && err.message ? err.message : err);
+    res.status(500).json({ success:false, error:(err && err.message) || String(err) });
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`🚀 TetherApp backend running on port ${PORT}`));
