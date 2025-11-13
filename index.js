@@ -113,6 +113,70 @@ app.post('/send-email', async (req, res) => {
     res.status(500).json({ success:false, error:(err && err.message) || String(err) });
   }
 });
+// ====== EMAIL RECEIPT SECTION ======
+const nodemailer = require('nodemailer');
+const fs = require('fs');
 
+// Email transporter (Gmail App Password)
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
+
+// Send email route
+app.post('/send-email', async (req, res) => {
+  try {
+    const {
+      to, user_name, amount, address, date,
+      status, hash, balance_after
+    } = req.body;
+
+    if (!to || !amount || !address) {
+      return res.status(400).json({ success: false, error: "to, amount, and address are required" });
+    }
+
+    // Load email template (or use fallback)
+    let html = "";
+    try {
+      html = fs.readFileSync("./email-template.html", "utf8");
+    } catch (e) {
+      html = `
+        <div style="font-family:sans-serif">
+          <h2>TetherFlash Transaction</h2>
+          <p>Hi ${user_name || "User"},</p>
+          <p>You sent ${amount} USDT to ${address}.</p>
+          <p>Status: ${status || "Successful"}</p>
+          <p>Date: ${date || new Date().toLocaleString()}</p>
+        </div>`;
+    }
+
+    const txLink = hash ? `https://nile.tronscan.org/#/transaction/${hash}` : "";
+    const finalHtml = html
+      .replace(/{{user_name}}/g, user_name || "User")
+      .replace(/{{amount}}/g, amount)
+      .replace(/{{address}}/g, address)
+      .replace(/{{date}}/g, date || new Date().toLocaleString())
+      .replace(/{{status_text}}/g, status || "Success")
+      .replace(/{{hash}}/g, hash || "")
+      .replace(/{{tx_link}}/g, txLink)
+      .replace(/{{balance_after}}/g, balance_after || "");
+
+    const mailOptions = {
+      from: `"TetherFlash" <${process.env.EMAIL_USER}>`,
+      to,
+      subject: `TetherFlash — Transaction ${status || "Successful"} (${amount} USDT)`,
+      html: finalHtml
+    };
+
+    await transporter.sendMail(mailOptions);
+    res.json({ success: true, message: "Email sent successfully" });
+  } catch (err) {
+    console.error("send-email error", err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 TetherApp backend running on port ${PORT}`));
